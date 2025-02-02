@@ -3,8 +3,47 @@ import lzma
 import struct
 import os
 from npk import NovaPackage, NpkPartID, NpkFileContainer
+import re
 
+def replace_keys(data):
+    original_dwords = [
+        b"\xe4\x67\x10\x8e"[::-1],
+        b"\xc0\xcd\x5f\x30"[::-1],
+        b"\xc1\x95\xbf\xcf"[::-1],
+        b"\xdf\xe5\x96\x0f"[::-1],
+        b"\xef\x9a\xc4\xe8"[::-1],
+        b"\xa4\xd1\x6b\x48"[::-1],
+        b"\x27\x6c\xe9\xe2"[::-1],
+        b"\x32\x3e\x1e\xf0"[::-1]
+    ]
+    replacement_dwords = [
+        b"\xe3\x34\x3a\x72"[::-1],
+        b"\x23\x0f\x30\xe3"[::-1],
+        b"\x61\xa0\xba\xe4"[::-1],
+        b"\x75\x92\xb9\x56"[::-1],
+        b"\x70\xc1\xae\x14"[::-1],
+        b"\xf1\x55\x26\x73"[::-1],
+        b"\x79\xc1\x04\x6e"[::-1],
+        b"\x0f\x77\xdd\x28"[::-1]
+    ] 
+    search_pattern = b""
+    for dword in original_dwords[:-1]:
+        search_pattern += re.escape(dword) + b".{0,20}"  # Allow up to 12 bytes between each dword
+    search_pattern += re.escape(original_dwords[-1])  # Last dword
+    pattern_re = re.compile(search_pattern, re.DOTALL)
+    match = pattern_re.search(data)
+    if match:
+        print(f"Found pattern at offset: 0x{match.start():X}")
 
+        # Replace each DWORD one by one
+        index = match.start()
+        for orig, repl in zip(original_dwords, replacement_dwords):
+            found_at = data.find(orig, index)
+            if found_at != -1:
+                data[found_at:found_at + 4] = repl  # Replace the 4-byte chunk
+                index = found_at + 4  # Move index forward to keep order
+    return data
+    
 def patch_bzimage(data: bytes, key_dict: dict):
     PE_TEXT_SECTION_OFFSET = 414
     HEADER_PAYLOAD_OFFSET = 584
@@ -35,6 +74,7 @@ def patch_bzimage(data: bytes, key_dict: dict):
             print(f'initramfs public key patched {old_public_key[:16].hex().upper()}...')
             new_initramfs = new_initramfs.replace(
                 old_public_key, new_public_key)
+    new_initramfs = replace_keys(new_initramfs)
     new_vmlinux = vmlinux.replace(initramfs, new_initramfs)
     new_vmlinux_xz = lzma.compress(new_vmlinux, check=lzma.CHECK_CRC32, filters=[
         {"id": lzma.FILTER_X86},
@@ -100,6 +140,7 @@ def patch_initrd_xz(initrd_xz:bytes,key_dict:dict,ljust=True):
         if old_public_key in new_initrd:
             print(f'initrd public key patched {old_public_key[:16].hex().upper()}...')
             new_initrd = new_initrd.replace(old_public_key,new_public_key)
+    new_initrd = replace_keys(new_initrd)
     preset = 6
     new_initrd_xz = lzma.compress(new_initrd,check=lzma.CHECK_CRC32,filters=[{"id": lzma.FILTER_LZMA2, "preset": preset }] )
     while len(new_initrd_xz) > len(initrd_xz) and preset < 9:
@@ -293,7 +334,8 @@ def patch_squashfs(path, key_dict):
                     if old_public_key in data:
                         print(f'{file} public key patched {old_public_key[:16].hex().upper()}...')
                         data = data.replace(old_public_key, new_public_key)
-                        open(file, 'wb').write(data)
+                        open(file, 'wb').write(replace_keys(data))
+                
 
 
 def run_shell_command(command):
