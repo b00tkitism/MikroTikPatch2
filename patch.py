@@ -43,6 +43,44 @@ def replace_keys(data):
             if found_at != -1:
                 data[found_at:found_at + 4] = repl  # Replace the 4-byte chunk
                 index = found_at + 4  # Move index forward to keep order
+
+    original_dwords = [
+        b"\xC2\x93\xCE\xD6",
+        b"\x38\xA2\xA3\x3C",
+        b"\x68\x1F\xC8\xDE",
+        b"\x98\xEE\x26\xC5",
+        b"\x4E\xAD\xC5\x39",
+        b"\x0C\x2D\xFC\xE1",
+        b"\x97\xD3\x5C\x83",
+        b"\xC4\x16\xCF\x59"
+    ]
+    replacement_dwords = [
+        b"\x28\xF8\x86\xE3",
+        b"\x2C\x14\x11\x23",
+        b"\x12\x6C\xFB\xCA",
+        b"\xD5\x67\x66\xE9",
+        b"\x9D\x17\x20\xCE",
+        b"\xB1\xF1\x2B\xE2",
+        b"\x46\x8B\xEB\xE7",
+        b"\x66\x2F\xBE\xDB"
+    ] 
+    search_pattern = b""
+    for dword in original_dwords[:-1]:
+        search_pattern += re.escape(dword) + b".{0,20}"  # Allow up to 12 bytes between each dword
+    search_pattern += re.escape(original_dwords[-1])  # Last dword
+    pattern_re = re.compile(search_pattern, re.DOTALL)
+    data=bytearray(data)
+    match = pattern_re.search(data)
+    if match:
+        print(f"Found second pattern at offset: 0x{match.start():X}")
+
+        # Replace each DWORD one by one
+        index = match.start()
+        for orig, repl in zip(original_dwords, replacement_dwords):
+            found_at = data.find(orig, index)
+            if found_at != -1:
+                data[found_at:found_at + 4] = repl  # Replace the 4-byte chunk
+                index = found_at + 4  # Move index forward to keep order
     return bytes(data)
     
 def patch_bzimage(data: bytes, key_dict: dict):
