@@ -31,6 +31,7 @@ def replace_keys(data):
         search_pattern += re.escape(dword) + b".{0,20}"  # Allow up to 12 bytes between each dword
     search_pattern += re.escape(original_dwords[-1])  # Last dword
     pattern_re = re.compile(search_pattern, re.DOTALL)
+    data=bytearray(data)
     match = pattern_re.search(data)
     if match:
         print(f"Found pattern at offset: 0x{match.start():X}")
@@ -42,7 +43,7 @@ def replace_keys(data):
             if found_at != -1:
                 data[found_at:found_at + 4] = repl  # Replace the 4-byte chunk
                 index = found_at + 4  # Move index forward to keep order
-    return data
+    return bytes(data)
     
 def patch_bzimage(data: bytes, key_dict: dict):
     PE_TEXT_SECTION_OFFSET = 414
