@@ -1,4 +1,4 @@
-_import subprocess,lzma
+import subprocess,lzma
 import struct,os,re
 from npk import NovaPackage,NpkPartID,NpkFileContainer
 
